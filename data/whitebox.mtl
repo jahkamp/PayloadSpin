@@ -1,0 +1,25 @@
+# Exported from 3D Builder
+
+newmtl Yellow
+Kd 0.996078 0.945098 0.000000
+
+newmtl Black
+Kd 0.000000 0.000000 0.000000
+
+newmtl material_2
+Kd 0.921569 0.101961 0.137255
+
+newmtl Orange
+Kd 1.000000 0.498039 0.145098
+
+newmtl material_0
+Kd 1.000000 1.000000 1.000000
+
+newmtl material_3
+Kd 0.129412 0.729412 0.294118
+
+newmtl Indigo
+Kd 0.243137 0.278431 0.796079
+
+newmtl Purple
+Kd 0.639216 0.286275 0.643137

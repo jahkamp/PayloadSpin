@@ -1,0 +1,5 @@
+BattVolt, Temp, AccX, AccY, AccZ, DegX, DegY, DegZ, OrientX, OrientY, OrientZ, SysCal, GyroCal, AccCal, MagCal, MinsOp
+Started at 6:15 AM 11/11/16 				(Minute 0)
+Launch at 10:45 AM 11/11/16 				(Minute 270)
+Whiteteam Touchdown at 1:00 PM 11/11/16 	(Minute 405)
+Redteam Touchdown at 12:40 PM 11/11/16		(Minute 385)

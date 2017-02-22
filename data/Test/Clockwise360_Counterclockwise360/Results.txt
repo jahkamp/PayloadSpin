@@ -1,0 +1,15 @@
+IMUGLD01
+349 clockwise
+352 counterclockwise
+
+IMURED02
+352 clockwise
+355 counterclockwise
+
+IMUWHT01
+353 clockwise
+352 counterclockwise
+
+IMUBLU00
+354 clockwise
+353 counterclockwise

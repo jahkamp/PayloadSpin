@@ -1,0 +1,21 @@
+RED BOX
+0:00:00 to 0:30:00 = 40k feet
+=1,333.3 ft/min
+=5k ft every 3.75 min
+@12 lines/min = 45 lines per 5k ft for 1,350 lines
+
+0:30:00 to 1:15:00 = 35k feet
+=777.7 ft/min
+=5k ft every 6.43 min
+@12 lines/min = 77 lines per 5k ft for remaining lines
+
+WHITE BOX
+0:00:00 to 0:30:00 = 45k feet
+=1,500 ft/min
+=5k ft every 3.33 min
+@12 lines/min = 40 lines per 5k ft for 1200 lines
+
+0:30:00 to 1:26:00 = 48k feet
+=857.14 ft/min
+=5k ft every 5.83 min
+@12 lines/min = 70 lines per 5k ft for remaining lines
