@@ -1,0 +1,17 @@
+Red Box 5k Calculations
+minutes		line	altitude
+266			1		0
+296 		361		40000
+341			892		75203
+=
+361 lines / first 40k = 0.009 lines/ft => 0.009*5k = 45.125 lines/5k ft
+531 lines / last 35203 = 0.01517 lines/ft => 0.01517*5k = 75.857 lines/5k ft
+
+White Box 5k Calculations
+minutes		line	altitude
+282			1		0
+312			365		47500
+368			1027	93619
+=
+365 lines / first 47500 = 0.00768 lines/ft => 0.00768*5k = 38.42 lines/5k ft
+662 lines / last 46119 = 0.01435 lines/ft => 0.01435*5k = 71.77 lines/5k feet

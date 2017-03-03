@@ -1,8 +1,8 @@
 ///////////////////////////////////////////
 // MSU Borealis Payload Motion Simulator //
 // Created by Jared Kamp 12/29/2016      //
-// Version 2.0.9                         //
-// Last Edited by Jared Kamp 2/8/2017   //
+// Version 2.0.10                         //
+// Last Edited by Jared Kamp 3/2/2017   //
 ///////////////////////////////////////////
 // + Version 2 uses hours, minutes, and seconds
 // which were previously unavailable in earlier
@@ -17,6 +17,7 @@
 // + 2.0.7 - Divided the yaw rotation into three parts; clockwise, counterclockwise, and combined. This done to illustrate rocking (oscillations) vs. spinning (circular).
 // + 2.0.8 - Rewrote the yaw rotation calculation to improve accuracy. Added tracking of positive and negative pitch and roll.
 // + 2.0.9 - Changed the file extension for IMU data from txt to csv. Moved the file path strings to an easier location to view/edit. Rewrote the pitch and roll calculations.
+// + 2.0.10 - Added backwards compatibility with data from Turbulence Datalogger version 1.
 
 import java.awt.datatransfer.*;
 import java.awt.Toolkit;
@@ -27,15 +28,34 @@ import java.io.FileReader;
 import java.io.FileNotFoundException;
 
 //File Paths
-String IRD_Data_FP = "C:/Users/Jared/Desktop/MSGC/IMU/Processing/payloadSpin/Data/Test/PitchPlus90_Minus90/IMUGLD02.CSV";
-String STL_Data_FP = "C:/Users/Jared/Desktop/MSGC/IMU/Processing/payloadSpin/Data/Test/PitchPlus90_Minus90/IMUWHT02.CSV";
-String VID_Data_FP = "C:/Users/Jared/Desktop/MSGC/IMU/Processing/payloadSpin/Data/Test/PitchPlus90_Minus90/IMUBLU02.CSV";
-String Model_FP = "C:/Users/Jared/Desktop/MSGC/IMU/Processing/payloadSpin/data/whitebox.obj";
+//White Box FPs
+String IRD_Data_FP = "C:/Users/Jared/Desktop/MSGC/IMU/Processing/payloadSpin/data/NovTwoBalloon/White Box/ascent_IMUIRD00.CSV";
+String STL_Data_FP = "C:/Users/Jared/Desktop/MSGC/IMU/Processing/payloadSpin/data/NovTwoBalloon/White Box/ascent_IMUSTL01.CSV";
+String VID_Data_FP = "C:/Users/Jared/Desktop/MSGC/IMU/Processing/payloadSpin/data/NovTwoBalloon/White Box/ascent_IMUVID01.CSV";
+//Red Box FPs
+//String IRD_Data_FP = "C:/Users/Jared/Desktop/MSGC/IMU/Processing/payloadSpin/data/NovTwoBalloon/Red Box/ascent_IMUIRD00.CSV";
+//String STL_Data_FP = "C:/Users/Jared/Desktop/MSGC/IMU/Processing/payloadSpin/data/NovTwoBalloon/Red Box/ascent_IMUSTL02.CSV";
+//String VID_Data_FP = "";//No video package for red payload.
+//Testing FPs
+//String IRD_Data_FP = "C:/Users/Jared/Desktop/MSGC/IMU/Processing/payloadSpin/Data/Test/PitchPlus90_Minus90/IMUGLD02.CSV";
+//String STL_Data_FP = "C:/Users/Jared/Desktop/MSGC/IMU/Processing/payloadSpin/Data/Test/PitchPlus90_Minus90/IMUWHT02.CSV";
+//String VID_Data_FP = "C:/Users/Jared/Desktop/MSGC/IMU/Processing/payloadSpin/Data/Test/PitchPlus90_Minus90/IMUBLU02.CSV";
+String White_Model_FP = "C:/Users/Jared/Desktop/MSGC/IMU/Processing/payloadSpin/data/whitebox.obj";
+String Red_Model_FP = "C:/Users/Jared/Desktop/MSGC/IMU/Processing/payloadSpin/data/redbox.obj";
+String Model_FP;
+
+//TurbulenceDatalogger Version
+int turbulenceVer = 1;
 
 //IMU sensitivity threshold adjustments
 int yawSensitivity = 0;
-int pitchSensitivity = 15;
-int rollSensitivity = 15;
+int pitchSensitivity = 5;
+int rollSensitivity = 5;
+
+//Red Payload vs. White Payload & Variable Ascent Rates (added in 2.0.10)
+boolean isRedPayload = false;
+int first_5k_increments;
+int loopsPer5k;
 
 //CSV files to ArrayLists
 ArrayList IRD_sensorData;
@@ -54,6 +74,7 @@ ArrayList IRD_SysCalib;
 ArrayList IRD_GyroCalib;
 ArrayList IRD_AcclCalib;
 ArrayList IRD_MagCalib;
+ArrayList IRD_Time;
 ArrayList IRD_Time_Hr;
 ArrayList IRD_Time_Min;
 ArrayList IRD_Time_Sec;
@@ -74,6 +95,7 @@ ArrayList STL_SysCalib;
 ArrayList STL_GyroCalib;
 ArrayList STL_AcclCalib;
 ArrayList STL_MagCalib;
+ArrayList STL_Time;
 ArrayList STL_Time_Hr;
 ArrayList STL_Time_Min;
 ArrayList STL_Time_Sec;
@@ -94,6 +116,7 @@ ArrayList VID_SysCalib;
 ArrayList VID_GyroCalib;
 ArrayList VID_AcclCalib;
 ArrayList VID_MagCalib;
+ArrayList VID_Time;
 ArrayList VID_Time_Hr;
 ArrayList VID_Time_Min;
 ArrayList VID_Time_Sec;
@@ -216,6 +239,11 @@ void setup()
   IRD_model = new OBJModel(this);
   STL_model = new OBJModel(this);
   VID_model = new OBJModel(this);
+  if(!isRedPayload){
+    Model_FP = White_Model_FP;
+  }else{
+    Model_FP = Red_Model_FP;
+  }
   
   IRD_sensorData=new ArrayList();
   IRD_BattVolt=new ArrayList();
@@ -233,11 +261,13 @@ void setup()
   IRD_GyroCalib=new ArrayList();
   IRD_AcclCalib=new ArrayList();
   IRD_MagCalib=new ArrayList();
-  IRD_Time_Hr=new ArrayList(); //in minutes
-  IRD_Time_Min=new ArrayList(); //in minutes
-  IRD_Time_Sec=new ArrayList(); //in minutes
+  IRD_Time=new ArrayList(); //in minutes (Added in 2.0.10)
+  IRD_Time_Hr=new ArrayList(); 
+  IRD_Time_Min=new ArrayList(); 
+  IRD_Time_Sec=new ArrayList(); 
   IRD_readData(IRD_Data_FP); //CSV File Path
   IRD_model.load(Model_FP);
+  IRD_model.scale(1);
   
   STL_sensorData=new ArrayList();
   STL_BattVolt=new ArrayList();
@@ -255,43 +285,54 @@ void setup()
   STL_GyroCalib=new ArrayList();
   STL_AcclCalib=new ArrayList();
   STL_MagCalib=new ArrayList();
+  STL_Time=new ArrayList(); //in minutes (Added in 2.0.10)
   STL_Time_Hr=new ArrayList(); 
   STL_Time_Min=new ArrayList(); 
   STL_Time_Sec=new ArrayList(); 
   STL_readData(STL_Data_FP); // CSV File Path
   STL_model.load(Model_FP);
-  
-  VID_sensorData=new ArrayList();
-  VID_BattVolt=new ArrayList();
-  VID_Temp=new ArrayList();
-  VID_AcclX=new ArrayList();
-  VID_AcclY=new ArrayList();
-  VID_AcclZ=new ArrayList();
-  VID_DegX=new ArrayList();
-  VID_DegY=new ArrayList();
-  VID_DegZ=new ArrayList();
-  VID_OrientX=new ArrayList();
-  VID_OrientY=new ArrayList();
-  VID_OrientZ=new ArrayList();
-  VID_SysCalib=new ArrayList();
-  VID_GyroCalib=new ArrayList();
-  VID_AcclCalib=new ArrayList();
-  VID_MagCalib=new ArrayList();
-  VID_Time_Hr=new ArrayList(); //in minutes
-  VID_Time_Min=new ArrayList(); //in minutes
-  VID_Time_Sec=new ArrayList(); //in minutes
-  VID_readData(VID_Data_FP); //CSV File Path
-  VID_model.load(Model_FP);
-  
-  IRD_model.scale(1);
   STL_model.scale(1);
-  VID_model.scale(1);
- 
+  
+  if(!isRedPayload){
+    VID_sensorData=new ArrayList();
+    VID_BattVolt=new ArrayList();
+    VID_Temp=new ArrayList();
+    VID_AcclX=new ArrayList();
+    VID_AcclY=new ArrayList();
+    VID_AcclZ=new ArrayList();
+    VID_DegX=new ArrayList();
+    VID_DegY=new ArrayList();
+    VID_DegZ=new ArrayList();
+    VID_OrientX=new ArrayList();
+    VID_OrientY=new ArrayList();
+    VID_OrientZ=new ArrayList();
+    VID_SysCalib=new ArrayList();
+    VID_GyroCalib=new ArrayList();
+    VID_AcclCalib=new ArrayList();
+    VID_MagCalib=new ArrayList();
+    VID_Time=new ArrayList(); //in minutes (Added in 2.0.10)
+    VID_Time_Hr=new ArrayList(); 
+    VID_Time_Min=new ArrayList();
+    VID_Time_Sec=new ArrayList();
+    VID_readData(VID_Data_FP); //CSV File Path
+    VID_model.load(Model_FP);
+    VID_model.scale(1);
+  }
+  
   // Simple 3 point lighting for dramatic effect.
   // Slightly red light in upper right, slightly blue light in upper left, and white light from behind.
   pointLight(255, 200, 200,  400, 400,  500);
   pointLight(200, 200, 255, -400, 400,  500);
   pointLight(255, 255, 255,    0,   0, -500);
+  
+  //Variable Ascent Rates (added in 2.0.10)
+  if(!isRedPayload){
+    first_5k_increments = 9;
+    loopsPer5k = 38;
+  }else{
+    first_5k_increments = 8;
+    loopsPer5k = 45;
+  }
 }
 void draw()
 { 
@@ -302,7 +343,11 @@ void draw()
   background(165, 200, 255);
   pushMatrix();
   
-  translate(600, 200, -200);
+  if(!isRedPayload){
+    translate(600, 200, -200);
+  }else{
+    translate(600, 300, -200);
+  }
   IRD_crunchNumbers();
   float c1 = cos(radians(roll));
   float s1 = sin(radians(roll));
@@ -320,7 +365,11 @@ void draw()
   popMatrix();
   popMatrix();
   pushMatrix();
-  translate(600, 550, -200);
+  if(!isRedPayload){
+    translate(600, 550, -200);
+  }else{
+    translate(600, 800, -200);
+  }
   STL_crunchNumbers();
   c1 = cos(radians(roll));
   s1 = sin(radians(roll));
@@ -337,25 +386,27 @@ void draw()
   STL_model.draw();
   popMatrix();
   popMatrix();
-  pushMatrix();
-  translate(600, 900, -200);
-  VID_crunchNumbers();
-  c1 = cos(radians(roll));
-  s1 = sin(radians(roll));
-  c2 = cos(radians(pitch)); // intrinsic rotation
-  s2 = sin(radians(pitch));
-  c3 = cos(radians(yaw));
-  s3 = sin(radians(yaw));
-  applyMatrix( c2*c3, s1*s3+c1*c3*s2, c3*s1*s2-c1*s3, 0,
-               -s2, c1*c2, c2*s1, 0,
-               c2*s3, c1*s2*s3-c3*s1, c1*c3+s1*s2*s3, 0,
-               0, 0, 0, 1);
-  pushMatrix();
-  noStroke();
-  VID_model.draw();
-  popMatrix();
-  popMatrix();
-  delay(50);  //5000 ~= real time
+  if(!isRedPayload){
+    pushMatrix();
+    translate(600, 900, -200);
+    VID_crunchNumbers();
+    c1 = cos(radians(roll));
+    s1 = sin(radians(roll));
+    c2 = cos(radians(pitch)); // intrinsic rotation
+    s2 = sin(radians(pitch));
+    c3 = cos(radians(yaw));
+    s3 = sin(radians(yaw));
+    applyMatrix( c2*c3, s1*s3+c1*c3*s2, c3*s1*s2-c1*s3, 0,
+                 -s2, c1*c2, c2*s1, 0,
+                 c2*s3, c1*s2*s3-c3*s1, c1*c3+s1*s2*s3, 0,
+                 0, 0, 0, 1);
+    pushMatrix();
+    noStroke();
+    VID_model.draw();
+    popMatrix();
+    popMatrix();
+  }
+  //delay(50);  //5000 ~= real time
   fiveThousandMark();
   lineNum++;
 }
@@ -736,9 +787,13 @@ void IRD_readData(String myFileName){
       IRD_GyroCalib.add(int(subtext[12]));
       IRD_AcclCalib.add(int(subtext[13]));
       IRD_MagCalib.add(int(subtext[14]));
-      IRD_Time_Hr.add(int(subtext[15]));
-      IRD_Time_Min.add(int(subtext[16]));
-      IRD_Time_Sec.add(int(subtext[17]));
+      if(turbulenceVer == 1){
+        IRD_Time.add(int(subtext[15]));
+      }else{
+        IRD_Time_Hr.add(int(subtext[15]));
+        IRD_Time_Min.add(int(subtext[16]));
+        IRD_Time_Sec.add(int(subtext[17]));
+      }
       IRD_sensorData.add(text);
     }
     //println("Done Reading Data");
@@ -779,9 +834,13 @@ void STL_readData(String myFileName){
       STL_GyroCalib.add(int(subtext[12]));
       STL_AcclCalib.add(int(subtext[13]));
       STL_MagCalib.add(int(subtext[14]));
-      STL_Time_Hr.add(int(subtext[15]));
-      STL_Time_Min.add(int(subtext[16]));
-      STL_Time_Sec.add(int(subtext[17]));
+      if(turbulenceVer == 1){
+        STL_Time.add(int(subtext[15]));
+      }else{
+        STL_Time_Hr.add(int(subtext[15]));
+        STL_Time_Min.add(int(subtext[16]));
+        STL_Time_Sec.add(int(subtext[17]));
+      }
       STL_sensorData.add(text);
     }
     //println("Done Reading Data");
@@ -822,9 +881,13 @@ void VID_readData(String myFileName){
       VID_GyroCalib.add(int(subtext[12]));
       VID_AcclCalib.add(int(subtext[13]));
       VID_MagCalib.add(int(subtext[14]));
-      VID_Time_Hr.add(int(subtext[15]));
-      VID_Time_Min.add(int(subtext[16]));
-      VID_Time_Sec.add(int(subtext[17]));
+      if(turbulenceVer == 1){
+        VID_Time.add(int(subtext[15]));
+      }else{
+        VID_Time_Hr.add(int(subtext[15]));
+        VID_Time_Min.add(int(subtext[16]));
+        VID_Time_Sec.add(int(subtext[17]));
+      }
       VID_sensorData.add(text);
     }
     //println("Done Reading Data");
@@ -844,7 +907,7 @@ void VID_readData(String myFileName){
 }
 void fiveThousandMark(){
   lineCount++; //For printing every 5000 feet or so.
-  if(lineCount == 59){
+  if(lineCount == loopsPer5k){
     markCount++;
     int printYawClockwise_IRD = (totalClockwiseDegYaw_IRD - lastYawClockwise_IRD);
     int printYawCounterClockwise_IRD = (totalCounterClockwiseDegYaw_IRD - lastYawCounterClockwise_IRD);
@@ -855,56 +918,18 @@ void fiveThousandMark(){
     int printPosPitch_IRD = (totalPosPitch_IRD - lastPosPitch_IRD);
     int printNegPitch_IRD = (totalNegPitch_IRD - lastNegPitch_IRD);
     int printPitch_IRD = (totalDegPitch_IRD - lastPitch_IRD);
-    int printYawClockwise_STL = (totalClockwiseDegYaw_STL - lastYawClockwise_STL);
-    int printYawCounterClockwise_STL = (totalCounterClockwiseDegYaw_STL - lastYawCounterClockwise_STL);
-    int printYawCombined_STL = (totalDegYaw_STL - lastYawCombined_STL);
-    int printPosRoll_STL = (totalPosRoll_STL - lastPosRoll_STL);
-    int printNegRoll_STL = (totalNegRoll_STL - lastNegRoll_STL);
-    int printRoll_STL = (totalDegRoll_STL - lastRoll_STL);
-    int printPosPitch_STL = (totalPosPitch_STL - lastPosPitch_STL);
-    int printNegPitch_STL = (totalNegPitch_STL - lastNegPitch_STL);
-    int printPitch_STL = (totalDegPitch_STL - lastPitch_STL);
-    int printYawClockwise_VID = (totalClockwiseDegYaw_VID - lastYawClockwise_VID);
-    int printYawCounterClockwise_VID = (totalCounterClockwiseDegYaw_VID - lastYawCounterClockwise_VID);
-    int printYawCombined_VID = (totalDegYaw_VID - lastYawCombined_VID);
-    int printPosRoll_VID = (totalPosRoll_VID - lastPosRoll_VID);
-    int printNegRoll_VID = (totalNegRoll_VID - lastNegRoll_VID);
-    int printRoll_VID = (totalDegRoll_VID - lastRoll_VID);
-    int printPosPitch_VID = (totalPosPitch_VID - lastPosPitch_VID);
-    int printNegPitch_VID = (totalNegPitch_VID - lastNegPitch_VID);
-    int printPitch_VID = (totalDegPitch_VID - lastPitch_VID);
     println("****************************");
     println(5000 * markCount + " approximate feet.");
-    println("Iridium Package Degrees Clockwise Yaw = " + printYawClockwise_IRD);
-    println("Iridium Package Degrees Counterclockwise Yaw = " + printYawCounterClockwise_IRD);
+    //println("Iridium Package Degrees Clockwise Yaw = " + printYawClockwise_IRD);
+    //println("Iridium Package Degrees Counterclockwise Yaw = " + printYawCounterClockwise_IRD);
     println("Iridium Package Degrees Total Yaw = " + printYawCombined_IRD);
-    println("Iridium Package Degrees Positive Pitch = " + printPosPitch_IRD);
-    println("Iridium Package Degrees Negative Pitch = " + printNegPitch_IRD);
+    //println("Iridium Package Degrees Positive Pitch = " + printPosPitch_IRD);
+    //println("Iridium Package Degrees Negative Pitch = " + printNegPitch_IRD);
     println("Iridium Package Degrees Total Pitch = " + printPitch_IRD);
-    println("Iridium Package Degrees Positive Roll = " + printPosRoll_IRD);
-    println("Iridium Package Degrees Negative Roll = " + printNegRoll_IRD);
+    //println("Iridium Package Degrees Positive Roll = " + printPosRoll_IRD);
+    //println("Iridium Package Degrees Negative Roll = " + printNegRoll_IRD);
     println("Iridium Package Degrees Total Roll = " + printRoll_IRD);
     println();
-    println("Still Image Package Degrees Clockwise Yaw = " + printYawClockwise_STL);
-    println("Still Image Package Degrees Counterclockwise Yaw = " + printYawCounterClockwise_STL);
-    println("Still Image Package Degrees Total Yaw = " + printYawCombined_STL);
-    println("Still Image Package Degrees Positive Pitch = " + printPosPitch_STL);
-    println("Still Image Package Degrees Negative Pitch = " + printNegPitch_STL);
-    println("Still Image Package Degrees Total Pitch = " + printPitch_STL);
-    println("Still Image Package Degrees Positive Roll = " + printPosRoll_STL);
-    println("Still Image Package Degrees Negative Roll = " + printNegRoll_STL);
-    println("Still Image Package Degrees Total Roll = " + printRoll_STL);
-    println();
-    println("Video Package Degrees Clockwise Yaw = " + printYawClockwise_VID);
-    println("Video Package Degrees Counterclockwise Yaw = " + printYawCounterClockwise_VID);
-    println("Video Package Degrees Total Yaw = " + printYawCombined_VID);
-    println("Video Package Degrees Positive Pitch = " + printPosPitch_VID);
-    println("Video Package Degrees Negative Pitch = " + printNegPitch_VID);
-    println("Video Package Degrees Total Pitch = " + printPitch_VID);
-    println("Video Package Degrees Positive Roll = " + printPosRoll_VID);
-    println("Video Package Degrees Negative Roll = " + printNegRoll_VID);
-    println("Video Package Degrees Total Roll = " + printRoll_VID);
-    lineCount = 0;
     lastYawClockwise_IRD = totalClockwiseDegYaw_IRD;
     lastYawCounterClockwise_IRD = totalCounterClockwiseDegYaw_IRD;
     lastYawCombined_IRD = totalDegYaw_IRD;
@@ -914,6 +939,25 @@ void fiveThousandMark(){
     lastPosRoll_IRD = totalPosRoll_IRD;
     lastNegRoll_IRD = totalNegRoll_IRD;
     lastRoll_IRD = totalDegRoll_IRD;
+    int printYawClockwise_STL = (totalClockwiseDegYaw_STL - lastYawClockwise_STL);
+    int printYawCounterClockwise_STL = (totalCounterClockwiseDegYaw_STL - lastYawCounterClockwise_STL);
+    int printYawCombined_STL = (totalDegYaw_STL - lastYawCombined_STL);
+    int printPosRoll_STL = (totalPosRoll_STL - lastPosRoll_STL);
+    int printNegRoll_STL = (totalNegRoll_STL - lastNegRoll_STL);
+    int printRoll_STL = (totalDegRoll_STL - lastRoll_STL);
+    int printPosPitch_STL = (totalPosPitch_STL - lastPosPitch_STL);
+    int printNegPitch_STL = (totalNegPitch_STL - lastNegPitch_STL);
+    int printPitch_STL = (totalDegPitch_STL - lastPitch_STL);
+    //println("Still Image Package Degrees Clockwise Yaw = " + printYawClockwise_STL);
+    //println("Still Image Package Degrees Counterclockwise Yaw = " + printYawCounterClockwise_STL);
+    println("Still Image Package Degrees Total Yaw = " + printYawCombined_STL);
+    //println("Still Image Package Degrees Positive Pitch = " + printPosPitch_STL);
+    //println("Still Image Package Degrees Negative Pitch = " + printNegPitch_STL);
+    println("Still Image Package Degrees Total Pitch = " + printPitch_STL);
+    //println("Still Image Package Degrees Positive Roll = " + printPosRoll_STL);
+    //println("Still Image Package Degrees Negative Roll = " + printNegRoll_STL);
+    println("Still Image Package Degrees Total Roll = " + printRoll_STL);
+    println();
     lastYawClockwise_STL = totalClockwiseDegYaw_STL;
     lastYawCounterClockwise_STL = totalCounterClockwiseDegYaw_STL;
     lastYawCombined_STL = totalDegYaw_STL;
@@ -923,15 +967,47 @@ void fiveThousandMark(){
     lastPosRoll_STL = totalPosRoll_STL;
     lastNegRoll_STL = totalNegRoll_STL;
     lastRoll_STL = totalDegRoll_STL;
-    lastYawClockwise_VID = totalClockwiseDegYaw_VID;
-    lastYawCounterClockwise_VID = totalCounterClockwiseDegYaw_VID;
-    lastYawCombined_VID = totalDegYaw_VID;
-    lastPosPitch_VID = totalPosPitch_VID;
-    lastNegPitch_VID = totalNegPitch_VID;
-    lastPitch_VID = totalDegPitch_VID;
-    lastPosRoll_VID = totalPosRoll_VID;
-    lastNegRoll_VID = totalNegRoll_VID;
-    lastRoll_VID = totalDegRoll_VID;
+    if(!isRedPayload){
+      int printYawClockwise_VID = (totalClockwiseDegYaw_VID - lastYawClockwise_VID);
+      int printYawCounterClockwise_VID = (totalCounterClockwiseDegYaw_VID - lastYawCounterClockwise_VID);
+      int printYawCombined_VID = (totalDegYaw_VID - lastYawCombined_VID);
+      int printPosRoll_VID = (totalPosRoll_VID - lastPosRoll_VID);
+      int printNegRoll_VID = (totalNegRoll_VID - lastNegRoll_VID);
+      int printRoll_VID = (totalDegRoll_VID - lastRoll_VID);
+      int printPosPitch_VID = (totalPosPitch_VID - lastPosPitch_VID);
+      int printNegPitch_VID = (totalNegPitch_VID - lastNegPitch_VID);
+      int printPitch_VID = (totalDegPitch_VID - lastPitch_VID);
+      //println("Video Package Degrees Clockwise Yaw = " + printYawClockwise_VID);
+      //println("Video Package Degrees Counterclockwise Yaw = " + printYawCounterClockwise_VID);
+      println("Video Package Degrees Total Yaw = " + printYawCombined_VID);
+      //println("Video Package Degrees Positive Pitch = " + printPosPitch_VID);
+      //println("Video Package Degrees Negative Pitch = " + printNegPitch_VID);
+      println("Video Package Degrees Total Pitch = " + printPitch_VID);
+      //println("Video Package Degrees Positive Roll = " + printPosRoll_VID);
+      //println("Video Package Degrees Negative Roll = " + printNegRoll_VID);
+      println("Video Package Degrees Total Roll = " + printRoll_VID);
+      lastYawClockwise_VID = totalClockwiseDegYaw_VID;
+      lastYawCounterClockwise_VID = totalCounterClockwiseDegYaw_VID;
+      lastYawCombined_VID = totalDegYaw_VID;
+      lastPosPitch_VID = totalPosPitch_VID;
+      lastNegPitch_VID = totalNegPitch_VID;
+      lastPitch_VID = totalDegPitch_VID;
+      lastPosRoll_VID = totalPosRoll_VID;
+      lastNegRoll_VID = totalNegRoll_VID;
+      lastRoll_VID = totalDegRoll_VID;
+    }
+    lineCount = 0;
+    
+    //The balloon changes ascent rate.
+    if(first_5k_increments == 0){
+      if(!isRedPayload){
+        loopsPer5k = 72;
+      }else{
+        loopsPer5k = 76;
+      }
+    }else{
+      first_5k_increments -= 1;
+    }
   }
 }
 void finish(){
@@ -959,15 +1035,17 @@ void finish(){
     println("Still Image Package Total Degrees Negative Roll = " + totalNegRoll_STL);
     println("Still Image Package Total Degrees Roll = " + totalDegRoll_STL);
     println();
-    println("Video Package Total Clockwise Degrees Yaw = " + totalClockwiseDegYaw_VID);
-    println("Video Package Total Counterclockwise Degrees Yaw = " + totalCounterClockwiseDegYaw_VID);
-    println("Video Package Total Combined Degrees Yaw = " + totalDegYaw_VID);
-    println("Video Package Total Degrees Positive Pitch = " + totalPosPitch_VID);
-    println("Video Package Total Degrees Negative Pitch = " + totalNegPitch_VID);
-    println("Video Package Total Degrees Pitch = " + totalDegPitch_VID);
-    println("Video Package Total Degrees Positive Roll = " + totalPosRoll_VID);
-    println("Video Package Total Degrees Negative Roll = " + totalNegRoll_VID);
-    println("Video Package Total Degrees Roll = " + totalDegRoll_VID);
+    if(!isRedPayload){
+      println("Video Package Total Clockwise Degrees Yaw = " + totalClockwiseDegYaw_VID);
+      println("Video Package Total Counterclockwise Degrees Yaw = " + totalCounterClockwiseDegYaw_VID);
+      println("Video Package Total Combined Degrees Yaw = " + totalDegYaw_VID);
+      println("Video Package Total Degrees Positive Pitch = " + totalPosPitch_VID);
+      println("Video Package Total Degrees Negative Pitch = " + totalNegPitch_VID);
+      println("Video Package Total Degrees Pitch = " + totalDegPitch_VID);
+      println("Video Package Total Degrees Positive Roll = " + totalPosRoll_VID);
+      println("Video Package Total Degrees Negative Roll = " + totalNegRoll_VID);
+      println("Video Package Total Degrees Roll = " + totalDegRoll_VID);
+    }
     printed = true;
   }
   exit();  
